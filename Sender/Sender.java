@@ -81,16 +81,24 @@ public class Sender {
         }
         fis.close();
         // Teardown
+        double elapsed = (System.nanoTime() - start_time) / 1000000000.0;
+        System.out.printf("Total Transmission Time: %.2f seconds%n", elapsed);
         DSPacket eot = new DSPacket(DSPacket.TYPE_EOT, seq_num, null);
-        send_packet(socket, rcv_address, rcv_data_port, eot);
-        System.out.println("Sender: EOT sent");
-        DSPacket eot_ack = receive_packet(socket);
-        if (eot_ack.getType() == DSPacket.TYPE_ACK && eot_ack.getSeqNum() == seq_num) {
-            double elapsed = (System.nanoTime() - start_time) / 1000000000.0;
-            System.out.printf("Total Transmission Time: %.2f seconds%n", elapsed);
+        for (int i = 0; i < 3; i++) {
+            send_packet(socket, rcv_address, rcv_data_port, eot);
+            System.out.println("Sender: EOT sent");
+            try {
+                DSPacket eot_ack = receive_packet(socket);
+                if (eot_ack.getType() == DSPacket.TYPE_ACK && eot_ack.getSeqNum() == seq_num) {
+                    System.out.println("Sender: EOT acknowledged.");
+                    break;
+                }
+            } catch (java.net.SocketTimeoutException e) {
+                System.out.println("Sender: EOT timeout #" + (i + 1));
+            }
         }
+        System.out.println("Sender: Transfer complete.");
     }
-
     private static void run_GBN(DatagramSocket socket, InetAddress rcv_address, int rcv_data_port, String input_file, int window_size, int timeout_ms) throws Exception {
         // Handshake
         long start_time = System.nanoTime();
@@ -139,13 +147,13 @@ public class Sender {
                 if (response.getType() == DSPacket.TYPE_ACK) {
                     int ack_seq = response.getSeqNum();
                     System.out.println("Sender: ACK received seq=" + ack_seq);
-                    for (int i = base; i < total_packets; i++) {
+                    for (int i = base; i < Math.min(base + window_size, total_packets); i++) {
                         if (all_packets.get(i).getSeqNum() == ack_seq) {
                             base = i + 1;
+                            timeout_count = 0;
                             break;
                         }
                     }
-                    timeout_count = 0;
                 }
             } catch (java.net.SocketTimeoutException e) {
                 timeout_count++;
@@ -158,14 +166,23 @@ public class Sender {
             }
         }
         // Teardown
+        double elapsed = (System.nanoTime() - start_time) / 1000000000.0;
+        System.out.printf("Total Transmission Time: %.2f seconds%n", elapsed);
         DSPacket eot = new DSPacket(DSPacket.TYPE_EOT, seq_num, null);
-        send_packet(socket, rcv_address, rcv_data_port, eot);
-        System.out.println("Sender: EOT sent");
-        DSPacket eot_ack = receive_packet(socket);
-        if (eot_ack.getType() == DSPacket.TYPE_ACK && eot_ack.getSeqNum() == seq_num) {
-            double elapsed = (System.nanoTime() - start_time) / 1000000000.0;
-            System.out.printf("Total Transmission Time: %.2f seconds%n", elapsed);
+        for (int i = 0; i < 3; i++) {
+            send_packet(socket, rcv_address, rcv_data_port, eot);
+            System.out.println("Sender: EOT sent");
+            try {
+                DSPacket eot_ack = receive_packet(socket);
+                if (eot_ack.getType() == DSPacket.TYPE_ACK && eot_ack.getSeqNum() == seq_num) {
+                    System.out.println("Sender: EOT acknowledged.");
+                    break;
+                }
+            } catch (java.net.SocketTimeoutException e) {
+                System.out.println("Sender: EOT timeout #" + (i + 1));
+            }
         }
+        System.out.println("Sender: Transfer complete.");
     }
     private static void send_packet(DatagramSocket socket, InetAddress rcv_address, int rcv_data_port, DSPacket packet) throws Exception {
         byte[] data = packet.toBytes();
